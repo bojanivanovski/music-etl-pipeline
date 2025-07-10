@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "music-etl-pipeline"
+version = "0.1.0"
+description = "ETL pipeline for music streaming data"
+authors = [{name = "Your Name", email = "your.email@company.com"}]
+license = {text = "MIT"}
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
+    "pandas>=2.1.0",
+    "requests>=2.31.0",
+    "spotipy>=2.22.1",
+    "boto3>=1.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# addopts = "--cov=ingestion --cov-report=html --cov-report=term-missing"  # Enable after installing pytest-cov
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
