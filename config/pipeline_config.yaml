@@ -1,0 +1,120 @@
+# Music ETL Pipeline Configuration
+pipeline:
+  name: "Music ETL Pipeline"
+  version: "1.0.0"
+  
+# Data ingestion settings
+ingestion:
+  # Days to look back for new releases
+  default_days_behind: 7
+  
+  # Maximum results per API call
+  max_results_per_genre: 1000
+  
+  # Rate limiting (seconds between requests)
+  rate_limit_delay: 0.1
+  
+  # Batch sizes for API calls
+  spotify_batch_size: 50
+  youtube_batch_size: 50
+
+# Music genres to focus on
+music:
+  approved_genres:
+    - "techno"
+    - "acid techno"
+    - "disco house"
+    - "funky house"
+    - "acid house"
+    - "chicago house"
+    - "progressive house"
+    - "deep house"
+    - "tech house"
+    - "minimal techno"
+  
+  # Genre aliases for better matching
+  genre_aliases:
+    house:
+      - "deep house"
+      - "tech house"
+      - "disco house"
+      - "funky house"
+      - "acid house"
+      - "chicago house"
+      - "progressive house"
+    techno:
+      - "acid techno"
+      - "minimal techno"
+      - "detroit techno"
+      - "industrial techno"
+
+# Data quality rules
+data_quality:
+  # Minimum required fields for each data type
+  required_fields:
+    spotify_song:
+      - "id"
+      - "name"
+      - "artist_name"
+      - "album_name"
+    
+    youtube_video:
+      - "video_id"
+      - "title"
+      - "channel_title"
+      - "published_at"
+  
+  # Data validation rules
+  validation_rules:
+    min_records_per_run: 1
+    max_records_per_run: 10000
+    max_null_percentage: 20  # Maximum % of null values allowed
+    
+    # Field-specific validation
+    spotify:
+      min_duration_ms: 10000      # 10 seconds minimum
+      max_duration_ms: 1800000    # 30 minutes maximum
+      min_popularity: 0
+      max_popularity: 100
+    
+    youtube:
+      min_view_count: 0
+      max_title_length: 200
+
+# Storage settings
+storage:
+  # Local development paths
+  local:
+    base_path: "data"
+    raw_path: "data/raw"
+    processed_path: "data/processed"
+    cache_path: "data/cache"
+  
+  # Cloud storage settings (for later)
+  s3:
+    bucket: "music-data-lake"
+    region: "us-west-2"
+  
+  # File formats and compression
+  file_format: "parquet"
+  compression: "snappy"
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  save_logs: true
+  log_file: "logs/pipeline.log"
+
+# API configuration
+apis:
+  spotify:
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 1
+  
+  youtube:
+    timeout: 30
+    retry_attempts: 3
+    retry_delay: 1
+    max_quota_per_day: 10000

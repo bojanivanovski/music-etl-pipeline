@@ -10,6 +10,9 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import pandas as pd
 
 from infrastructure.logger import Logger
+from config.config_manager import ConfigManager
+from validation.data_validator import DataValidator
+
 
 class Artist:
     """Represents a Spotify artist"""
@@ -97,7 +100,7 @@ class Album:
 class Song:
     """Represents a Spotify song/track"""
     
-    def __init__(self, spotify_id, name, artist_name, album_name, duration_ms, track_number, explicit=False, preview_url=None, external_urls=None, popularity=None):
+    def __init__(self, spotify_id, name, artist_name, album_name, duration_ms, track_number, explicit=False, preview_url=None, external_urls=None, popularity=None, published_at=None):
         self.spotify_id = spotify_id
         self.name = name
         self.artist_name = artist_name
@@ -108,6 +111,7 @@ class Song:
         self.preview_url = preview_url
         self.external_urls = external_urls or {}
         self.popularity = popularity
+        self.published_at = published_at
     
     @classmethod
     def from_json(cls, json_data):
@@ -122,7 +126,8 @@ class Song:
             explicit=json_data.get('explicit', False),
             preview_url=json_data.get('preview_url'),
             external_urls=json_data.get('external_urls', {}),
-            popularity=json_data.get('popularity')
+            popularity=json_data.get('popularity'),
+            published_at=json_data.get('published_at')
         )
     
     def to_json(self):
@@ -137,7 +142,8 @@ class Song:
             'explicit': self.explicit,
             'preview_url': self.preview_url,
             'external_urls': self.external_urls,
-            'popularity': self.popularity
+            'popularity': self.popularity,
+            'published_at': self.published_at
         }
     
     def __repr__(self):
@@ -146,8 +152,13 @@ class Song:
 class SpotifyIngestion:
     
     def __init__(self):
-        self.approved_genres=["techno", "acid techno", "disco house", "funky house", "acid house", "chicago house", "progressive house"]
-
+        # Replace the hardcoded approved_genres with config
+        self.config_manager = ConfigManager()
+        self.approved_genres = self.config_manager.get_approved_genres()
+        
+        # Initialize validator
+        self.validator = DataValidator(self.config_manager)
+        
         self.logger =  Logger("SpotifyIngestion")
         load_dotenv()
         
@@ -174,12 +185,40 @@ class SpotifyIngestion:
         new_songs:list[Song] = []
         for artist in artists:
             albums = self.get_artist_recent_albums(artist.spotify_id)
-            songs = self.get_songs_for_albums(albums)
-            new_songs.append(songs)
+            if len(albums) > 0 :
+                songs = self.get_songs_for_albums(albums)
+                if len(songs) > 0:
+                    new_songs.append(songs)
+        
+        if len(new_songs) == 0:
+            self.logger.warning("No songs found")
+            return None
         
         all_songs = [song for songs in new_songs for song in songs]
         df = pd.DataFrame([song.to_json() for song in all_songs])
         df['ingested_timestamp'] = datetime.now()
+        df['source'] = 'spotify'
+
+        # NEW: Add data validation
+        is_valid, validation_report = self.validator.validate_spotify_data(df)
+        
+        if not is_valid:
+            self.logger.error("❌ Data validation failed")
+            for issue in validation_report['issues']:
+                self.logger.error(f"  - {issue}")
+            return None
+        
+        # Log validation summary
+        metrics = validation_report['metrics']
+        self.logger.success(f"✅ Data validation passed: {len(df)} records")
+        self.logger.info(f"📊 Unique tracks: {metrics.get('unique_tracks', 0)}")
+        self.logger.info(f"📊 Unique artists: {metrics.get('unique_artists', 0)}")
+        self.logger.info(f"📊 Avg popularity: {metrics.get('avg_popularity', 0)}")
+        
+        if validation_report['warnings']:
+            self.logger.warning(f"⚠️  {len(validation_report['warnings'])} data quality warnings")
+            for warning in validation_report['warnings']:
+                self.logger.warning(f"  - {warning}")
         
         # Save to parquet file
         data_dir = Path("data/raw/spotify")
@@ -406,6 +445,7 @@ class SpotifyIngestion:
                     # Create song object with album information
                     song_data = track.copy()
                     song_data['album'] = {'name': album.name}
+                    song_data['published_at'] = album.release_date
                     song_obj = Song.from_json(song_data)
                     all_songs.append(song_obj)
                 
